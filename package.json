@@ -1,0 +1,23 @@
+{
+  "name": "complex-pg-app",
+  "version": "1.0.0",
+  "description": "Node.js + PostgreSQL advanced queries (cross join, aggregations, subqueries), API + CLI, seeding with Faker, transactions, pagination, profiling.",
+  "main": "src/server.js",
+  "scripts": {
+    "setup": "node src/setup.js",
+    "start": "node src/server.js",
+    "cli": "node src/cli.js",
+    "profile": "node src/profile.js"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.3.1",
+    "csv-parser": "^3.2.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
