@@ -15,12 +15,25 @@ async function crossJoinRecommendations({ minPrice = 0, limit = 10, offset = 0, 
     idx++;
   }
 
+  // 1. First get the total count
+  const countSql = `
+    SELECT COUNT(*) as total
+    FROM users u
+    CROSS JOIN products p
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+  `;
+  
+  const countParams = params.slice(0, idx - 1); // Only filter params, not limit/offset
+  const { rows: countResult } = await pool.query(countSql, countParams);
+  const totalCount = parseInt(countResult[0].total);
+
+  // 2. Then get the paginated data
   params.push(Number(limit));
   const limitParam = idx++;
   params.push(Number(offset));
   const offsetParam = idx++;
 
-  const sql = `
+  const dataSql = `
     SELECT u.id AS user_id, u.name AS user_name, p.id AS product_id, p.name AS product_name, p.price
     FROM users u
     CROSS JOIN products p
@@ -29,13 +42,48 @@ async function crossJoinRecommendations({ minPrice = 0, limit = 10, offset = 0, 
     LIMIT $${limitParam} OFFSET $${offsetParam};
   `;
 
-  const { rows } = await pool.query(sql, params);
-  return rows;
+  const { rows: data } = await pool.query(dataSql, params);
+
+  // 3. Calculate pagination metadata
+  const currentPage = Math.floor(offset / limit) + 1;
+  const totalPages = Math.ceil(totalCount / limit);
+  const hasNextPage = (offset + limit) < totalCount;
+  const hasPrevPage = offset > 0;
+
+  return {
+    data,
+    pagination: {
+      currentPage,
+      totalPages,
+      totalCount,
+      hasNextPage,
+      hasPrevPage,
+      limit,
+      offset
+    }
+  };
 }
 
 // GROUP BY + HAVING: users with total order value > minTotal
 async function highValueUsers({ minTotal = 1000 }) {
-  const sql = `
+  // 1. Get total count
+  const countSql = `
+    SELECT COUNT(*) as total
+    FROM (
+      SELECT u.id
+      FROM users u
+      JOIN orders o ON o.user_id = u.id
+      JOIN products p ON p.id = o.product_id
+      GROUP BY u.id, u.name
+      HAVING SUM(o.quantity * p.price) > $1
+    ) subquery
+  `;
+  
+  const { rows: countResult } = await pool.query(countSql, [Number(minTotal)]);
+  const totalCount = parseInt(countResult[0].total);
+
+  // 2. Get the actual data
+  const dataSql = `
     SELECT u.id, u.name, ROUND(SUM(o.quantity * p.price)::numeric, 2) AS total_value
     FROM users u
     JOIN orders o ON o.user_id = u.id
@@ -44,8 +92,21 @@ async function highValueUsers({ minTotal = 1000 }) {
     HAVING SUM(o.quantity * p.price) > $1
     ORDER BY total_value DESC;
   `;
-  const { rows } = await pool.query(sql, [Number(minTotal)]);
-  return rows;
+  
+  const { rows: data } = await pool.query(dataSql, [Number(minTotal)]);
+
+  return {
+    data,
+    pagination: {
+      currentPage: 1,
+      totalPages: 1,
+      totalCount,
+      hasNextPage: false,
+      hasPrevPage: false,
+      limit: totalCount,
+      offset: 0
+    }
+  };
 }
 
 // Top-selling product per user via subquery + window function
@@ -71,8 +132,20 @@ async function topProductPerUser({ userId }) {
     JOIN products p ON p.id = r.product_id
     WHERE r.user_id = $1 AND r.rn = 1;
   `;
-  const { rows } = await pool.query(sql, [Number(userId)]);
-  return rows;
+  const { rows: data } = await pool.query(sql, [Number(userId)]);
+  
+  return {
+    data,
+    pagination: {
+      currentPage: 1,
+      totalPages: 1,
+      totalCount: data.length,
+      hasNextPage: false,
+      hasPrevPage: false,
+      limit: data.length,
+      offset: 0
+    }
+  };
 }
 
 module.exports = {

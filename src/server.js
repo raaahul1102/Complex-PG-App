@@ -14,9 +14,14 @@ app.get('/queries/cross-join', async (req, res) => {
     const offset = Number(req.query.offset || 0);
     const nameLike = req.query.nameLike || '';
     const results = await crossJoinRecommendations({ minPrice, limit, offset, nameLike });
+    
     if (req.query.export === '1') {
-      const file = await exportToCsv(results, 'cross_join.csv');
-      return res.json({ exported: file, rows: results.length });
+      const file = await exportToCsv(results.data, 'cross_join.csv');
+      return res.json({ 
+        exported: file, 
+        rowsExported: results.data.length,
+        pagination: results.pagination 
+      });
     }
     res.json(results);
   } catch (e) {
@@ -28,9 +33,14 @@ app.get('/queries/high-value-users', async (req, res) => {
   try {
     const minTotal = Number(req.query.minTotal || 1000);
     const results = await highValueUsers({ minTotal });
+    
     if (req.query.export === '1') {
-      const file = await exportToCsv(results, 'high_value_users.csv');
-      return res.json({ exported: file, rows: results.length });
+      const file = await exportToCsv(results.data, 'high_value_users.csv');
+      return res.json({ 
+        exported: file, 
+        rowsExported: results.data.length,
+        pagination: results.pagination 
+      });
     }
     res.json(results);
   } catch (e) {
